@@ -50,13 +50,13 @@ python run.py -->
 
 
 
-# 💰 Finance Tracker API
+#  Finance Tracker API
 
 A RESTful API built with **Flask** and **PostgreSQL** for tracking personal finances — income, expenses, and analytics. Features JWT authentication, structured logging, database migrations, automated tests, and CI/CD with GitHub Actions.
 
 ---
 
-## 🚀 Features
+##  Features
 
 - **JWT Authentication** — Secure register and login with JSON Web Tokens
 - **Transaction Management** — Create, read, update, and delete income/expense transactions
@@ -69,7 +69,7 @@ A RESTful API built with **Flask** and **PostgreSQL** for tracking personal fina
 
 ---
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -86,7 +86,7 @@ A RESTful API built with **Flask** and **PostgreSQL** for tracking personal fina
 
 ---
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 finance-tracker/
@@ -116,7 +116,7 @@ finance-tracker/
 
 ---
 
-## ⚙️ Setup & Installation
+##  Setup & Installation
 
 ### 1. Clone the repository
 
@@ -175,7 +175,7 @@ The API will be available at `http://localhost:5000`
 
 ---
 
-## 📡 API Endpoints
+##  API Endpoints
 
 ### Authentication
 
@@ -196,7 +196,7 @@ The API will be available at `http://localhost:5000`
 
 ---
 
-## 📝 Request & Response Examples
+##  Request & Response Examples
 
 ### Register
 
@@ -306,7 +306,7 @@ Authorization: Bearer <your_token>
 
 ---
 
-## 🧪 Running Tests
+##  Running Tests
 
 ```bash
 pytest tests/ -v
@@ -343,7 +343,7 @@ Tests use an **in-memory SQLite database** — no PostgreSQL required to run tes
 
 ---
 
-## 🔄 Database Migrations
+##  Database Migrations
 
 When you change `models.py`, update the database with:
 
@@ -362,7 +362,7 @@ flask db downgrade
 
 ---
 
-## 📋 Logging
+##  Logging
 
 Logs are written to two places simultaneously:
 
@@ -381,7 +381,7 @@ LOG_LEVEL=WARNING  # Shows only warnings and errors
 
 ---
 
-## 🔁 CI/CD
+##  CI/CD
 
 GitHub Actions automatically runs all 17 tests on every push to `main` or `develop`.
 
@@ -395,7 +395,7 @@ Python installed → Dependencies installed → pytest runs →
 
 ---
 
-## 🔐 Environment Variables
+##  Environment Variables
 
 | Variable | Description | Example |
 |---|---|---|
@@ -407,6 +407,6 @@ Python installed → Dependencies installed → pytest runs →
 
 ---
 
-## 👨‍💻 Author
+##  Author
 
 Built as a learning project covering Flask API development, PostgreSQL, JWT authentication, logging, database migrations, testing, and CI/CD.
