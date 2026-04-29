@@ -1,6 +1,22 @@
+# Virtual Environment
 venv/
+
+# Environment Variables
+.env
+*.env
+
+# Logs
+logs/
+*.log
+
+# Python Cache
 __pycache__/
 *.pyc
-.env
+*.pyo
+
+# Pytest
+.pytest_cache/
+
+# Database
 *.db
 instance/

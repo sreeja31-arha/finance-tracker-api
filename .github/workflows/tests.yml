@@ -1,0 +1,92 @@
+# .github/workflows/tests.yml
+#
+# This file tells GitHub Actions to automatically run your tests
+# every time you push code to GitHub.
+#
+# GitHub reads this file automatically — you never call it manually.
+
+# ── Name ──────────────────────────────────────────────────────────────────────
+# This is just the display name shown on GitHub's Actions tab
+name: Run Tests
+
+# ── Trigger ───────────────────────────────────────────────────────────────────
+# When should this workflow run?
+on:
+  push:
+    branches:
+      - main        # Run when you push to main branch
+      - develop     # Run when you push to develop branch too
+  pull_request:
+    branches:
+      - main        # Run when someone creates a pull request to main
+# This means: every push and every pull request triggers your tests
+# You can't accidentally merge broken code without tests running first
+
+# ── Jobs ──────────────────────────────────────────────────────────────────────
+# A job is a set of steps that run on one machine
+# You can have multiple jobs — for now we just need one: 'test'
+jobs:
+  test:
+    # What kind of machine to use
+    # ubuntu-latest = latest Ubuntu Linux in GitHub's cloud
+    # A brand new clean machine is created for every single run
+    runs-on: ubuntu-latest
+
+    # ── Steps ───────────────────────────────────────────────────────────────
+    # Steps run one by one in order
+    # If any step fails, all remaining steps are skipped
+    steps:
+
+      # Step 1: Download your code onto the Ubuntu machine
+      # Without this, the machine has no idea what your project is
+      - name: Checkout code
+        uses: actions/checkout@v3
+        # 'uses' means: use a pre-built GitHub Action
+        # actions/checkout@v3 is GitHub's official action for downloading code
+
+      # Step 2: Install Python on the Ubuntu machine
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          # Use the same Python version you use locally
+          # This ensures tests behave the same on GitHub as on your laptop
+
+      # Step 3: Upgrade pip then install all your dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+        # 'run' means: run this shell command on the Ubuntu machine
+        # | means: run multiple lines as one block
+        # We upgrade pip first to avoid outdated package warnings
+
+      # Step 4: Set environment variables
+      # Your real .env file is in .gitignore — it never gets pushed to GitHub
+      # So we define the required variables directly here for the test run
+      # These match what your app expects from the environment
+      - name: Run tests
+        run: pytest tests/ -v
+        # -v = verbose mode: shows each test name and PASSED/FAILED
+        # If any test fails → this step fails → GitHub shows red X
+        env:
+          FLASK_ENV: testing
+          FLASK_APP: app.py
+
+          # Secret keys — safe to hardcode here because these are
+          # only used during testing, not in real production
+          SECRET_KEY: test-secret-key-for-ci
+          JWT_SECRET_KEY: test-secret-key-for-ci
+
+          # Use SQLite in memory instead of PostgreSQL
+          # Your tests already use this — so no database setup needed
+          # This is why your tests work without installing PostgreSQL
+          SQLALCHEMY_DATABASE_URI: sqlite:///:memory:
+
+          # Silence SQLAlchemy logs during tests to keep output clean
+          SQLALCHEMY_TRACK_MODIFICATIONS: false
+
+          # Set log level to ERROR during CI so test output is clean
+          # You don't need DEBUG logs when running automated tests
+          LOG_LEVEL: ERROR

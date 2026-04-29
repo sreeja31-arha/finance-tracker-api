@@ -1,23 +1,31 @@
 from flask import Flask, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager
-from config import Config
+from .config import get_config
+from .logging_config import setup_logging
+from flask_migrate import Migrate
 
 db = SQLAlchemy()
 jwt = JWTManager()
+migrate = Migrate()
 
 def create_app():
     app = Flask(__name__)
-    app.config.from_object(Config)
+    app.config.from_object(get_config()) 
+    
+    setup_logging(app)
 
     db.init_app(app)
     jwt.init_app(app)
+    migrate.init_app(app, db)
 
     from app.routes import main
     from app.auth import auth
+    
+    #with api versioning
 
-    app.register_blueprint(main)
-    app.register_blueprint(auth)
+    app.register_blueprint(main,url_prefix="/api/v1")
+    app.register_blueprint(auth,url_prefix="/api/v1/auth")
 
     # Error handlers
     @app.errorhandler(404)

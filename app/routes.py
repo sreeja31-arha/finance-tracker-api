@@ -1,3 +1,6 @@
+# app/routes.py
+
+import logging  # ← Python's built-in logging module
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
@@ -5,16 +8,25 @@ from app.models import Transaction
 from app.schemas import TransactionSchema
 from marshmallow import ValidationError
 
+# Creates a logger named "app.routes" (from __name__)
+# Separate from "app.auth" — so in your log file you can tell which
+# file each message came from
+logger = logging.getLogger(__name__)
+
 main = Blueprint('main', __name__)
 
 transaction_schema = TransactionSchema()
 
+
 @main.route('/')
 def home():
+    # DEBUG: lightweight health check trace — only visible in log file
+    logger.debug("Health check endpoint hit")
     return jsonify({
         'message': 'Welcome to Finance Tracker API!',
         'status': 'running'
     })
+
 
 @main.route('/transactions', methods=['POST'])
 @jwt_required()
@@ -22,10 +34,20 @@ def add_transaction():
     current_user_id = get_jwt_identity()
     data = request.get_json()
 
-    # Validate input
+    # DEBUG: log what the user is trying to create
+    logger.debug(
+        "Add transaction request — user_id: %s, data: %s",
+        current_user_id, data
+    )
+
     try:
         validated_data = transaction_schema.load(data)
     except ValidationError as err:
+        # WARNING: user sent invalid data — their mistake, not a system error
+        logger.warning(
+            "Transaction validation failed — user_id: %s, errors: %s",
+            current_user_id, err.messages
+        )
         return jsonify({'errors': err.messages}), 400
 
     transaction = Transaction(
@@ -36,22 +58,48 @@ def add_transaction():
         user_id=current_user_id
     )
 
-    db.session.add(transaction)
-    db.session.commit()
+    # Wrap DB write in try/except
+    # rollback() on failure keeps the DB session clean for future requests
+    try:
+        db.session.add(transaction)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        # ERROR: unexpected DB failure — exc_info=True adds full traceback
+        logger.error(
+            "DB error saving transaction — user_id: %s: %s",
+            current_user_id, e,
+            exc_info=True
+        )
+        return jsonify({'message': 'Failed to save transaction.'}), 500
 
+    # INFO: one clean line confirming what was created and by whom
+    logger.info(
+        "Transaction created — id: %s, type: %s, amount: %s, user_id: %s",
+        transaction.id, transaction.type, transaction.amount, current_user_id
+    )
     return jsonify({
         'message': 'Transaction added successfully!',
         'transaction': transaction.to_dict()
     }), 201
 
+
 @main.route('/transactions', methods=['GET'])
 @jwt_required()
 def get_transactions():
     current_user_id = get_jwt_identity()
+
     transactions = Transaction.query.filter_by(user_id=current_user_id).all()
+
+    # INFO: log count of results — useful for spotting empty accounts or data issues
+    logger.info(
+        "Fetched %d transactions — user_id: %s",
+        len(transactions), current_user_id
+    )
     return jsonify({
         'transactions': [t.to_dict() for t in transactions]
     })
+
 
 @main.route('/transactions/<int:id>', methods=['PUT'])
 @jwt_required()
@@ -59,15 +107,31 @@ def update_transaction(id):
     current_user_id = get_jwt_identity()
     data = request.get_json()
 
-    transaction = Transaction.query.filter_by(id=id, user_id=current_user_id).first()
+    # DEBUG: log update intent before touching the DB
+    logger.debug(
+        "Update transaction request — id: %s, user_id: %s, data: %s",
+        id, current_user_id, data
+    )
+
+    transaction = Transaction.query.filter_by(
+        id=id, user_id=current_user_id
+    ).first()
 
     if not transaction:
+        # WARNING: could be a wrong ID or someone probing another user's data
+        logger.warning(
+            "Transaction not found for update — id: %s, user_id: %s",
+            id, current_user_id
+        )
         return jsonify({'message': 'Transaction not found!'}), 404
 
-    # Validate input
     try:
         validated_data = transaction_schema.load(data, partial=True)
     except ValidationError as err:
+        logger.warning(
+            "Update validation failed — id: %s, errors: %s",
+            id, err.messages
+        )
         return jsonify({'errors': err.messages}), 400
 
     transaction.title = validated_data.get('title', transaction.title)
@@ -75,53 +139,97 @@ def update_transaction(id):
     transaction.type = validated_data.get('type', transaction.type)
     transaction.category = validated_data.get('category', transaction.category)
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.error(
+            "DB error updating transaction — id: %s: %s",
+            id, e,
+            exc_info=True
+        )
+        return jsonify({'message': 'Failed to update transaction.'}), 500
 
+    logger.info(
+        "Transaction updated — id: %s, user_id: %s",
+        id, current_user_id
+    )
     return jsonify({
         'message': 'Transaction updated successfully!',
         'transaction': transaction.to_dict()
     })
 
+
 @main.route('/transactions/<int:id>', methods=['DELETE'])
 @jwt_required()
 def delete_transaction(id):
     current_user_id = get_jwt_identity()
-    transaction = Transaction.query.filter_by(id=id, user_id=current_user_id).first()
+
+    logger.debug(
+        "Delete transaction request — id: %s, user_id: %s",
+        id, current_user_id
+    )
+
+    transaction = Transaction.query.filter_by(
+        id=id, user_id=current_user_id
+    ).first()
 
     if not transaction:
+        logger.warning(
+            "Transaction not found for delete — id: %s, user_id: %s",
+            id, current_user_id
+        )
         return jsonify({'message': 'Transaction not found!'}), 404
 
-    db.session.delete(transaction)
-    db.session.commit()
+    try:
+        db.session.delete(transaction)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.error(
+            "DB error deleting transaction — id: %s: %s",
+            id, e,
+            exc_info=True
+        )
+        return jsonify({'message': 'Failed to delete transaction.'}), 500
 
-    return jsonify({
-        'message': 'Transaction deleted successfully!'
-    })
-    
-@main.route('/transactions/analytics',methods=['GET'])
+    logger.info(
+        "Transaction deleted — id: %s, user_id: %s",
+        id, current_user_id
+    )
+    return jsonify({'message': 'Transaction deleted successfully!'})
+
+
+@main.route('/transactions/analytics', methods=['GET'])
 @jwt_required()
 def get_analytics():
-    current_user_id=get_jwt_identity()
-    
-    transactions=Transaction.query.filter_by(user_id=current_user_id).all()
-    
-    total_income=sum(t.amount for t in transactions if t.type=='income')
-    total_expense=sum(t.amount for t in transactions if t.type=='expense')
-    net_balance=total_income-total_expense
-    
-    categories={}
-    
+    current_user_id = get_jwt_identity()
+
+    logger.debug("Analytics request — user_id: %s", current_user_id)
+
+    transactions = Transaction.query.filter_by(user_id=current_user_id).all()
+
+    total_income = sum(t.amount for t in transactions if t.type == 'income')
+    total_expense = sum(t.amount for t in transactions if t.type == 'expense')
+    net_balance = total_income - total_expense
+
+    categories = {}
     for t in transactions:
-        if t.type=='expense':
+        if t.type == 'expense':
             if t.category not in categories:
-                categories[t.category]=0
-            categories[t.category]+=t.amount
-            
+                categories[t.category] = 0
+            categories[t.category] += t.amount
+
+    # INFO: log the computed summary — useful for usage patterns
+    logger.info(
+        "Analytics served — user_id: %s | income: %s, expense: %s, balance: %s",
+        current_user_id, total_income, total_expense, net_balance
+    )
     return jsonify({
-        'total_income':total_income,
-        'total_expense':total_expense,
-        'net_balance':net_balance,
-        'categories':categories
+        'total_income': total_income,
+        'total_expense': total_expense,
+        'net_balance': net_balance,
+        'categories': categories
     })
             
             
