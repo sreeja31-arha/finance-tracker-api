@@ -1,75 +1,25 @@
-<!-- # Finance Tracker API
-
-A production-grade REST API built with Flask and PostgreSQL.
-
-## Features
-- JWT Authentication
-- Full CRUD for transactions
-- Spending Analytics
-- Input Validation
-- Error Handling
-- Docker support
-
-## Tech Stack
-- Python 3.14
-- Flask
-- PostgreSQL
-- SQLAlchemy
-- JWT
-- Docker
-
-## API Endpoints
-
-### Auth
-- POST /auth/register - Register a new user
-- POST /auth/login - Login and get JWT token
-
-### Transactions
-- GET /transactions - Get all transactions
-- POST /transactions - Add a transaction
-- PUT /transactions/<id> - Update a transaction
-- DELETE /transactions/<id> - Delete a transaction
-
-### Analytics
-- GET /transactions/analytics - Get spending analytics
-
-## Setup
-
-### 1. Clone the repository
-git clone https://github.com/sreeja31-arha/finance-tracker-api.git
-
-### 2. Create virtual environment
-python -m venv venv
-venv\Scripts\activate
-
-### 3. Install dependencies
-pip install -r requirements.txt
-
-### 4. Run the app
-python run.py -->
-
-
-
-#  Finance Tracker API
+# 💰 Finance Tracker API
 
 A RESTful API built with **Flask** and **PostgreSQL** for tracking personal finances — income, expenses, and analytics. Features JWT authentication, structured logging, database migrations, automated tests, and CI/CD with GitHub Actions.
 
 ---
 
-##  Features
+## 🚀 Features
 
 - **JWT Authentication** — Secure register and login with JSON Web Tokens
 - **Transaction Management** — Create, read, update, and delete income/expense transactions
+- **Pagination** — All transaction lists support `?page=1&limit=10` parameters
+- **Filtering** — Filter transactions by type, category, and month
 - **Analytics** — Total income, total expenses, net balance, and category breakdown
 - **API Versioning** — All endpoints under `/api/v1/`
 - **Structured Logging** — Terminal + rotating file logs with configurable log levels
 - **Database Migrations** — Alembic/Flask-Migrate for safe schema changes
-- **Automated Tests** — 17 pytest tests covering all endpoints
+- **Automated Tests** — 27 pytest tests covering all endpoints
 - **CI/CD** — GitHub Actions automatically runs tests on every push
 
 ---
 
-##  Tech Stack
+## 🛠️ Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -86,7 +36,7 @@ A RESTful API built with **Flask** and **PostgreSQL** for tracking personal fina
 
 ---
 
-##  Project Structure
+## 📁 Project Structure
 
 ```
 finance-tracker/
@@ -116,7 +66,7 @@ finance-tracker/
 
 ---
 
-##  Setup & Installation
+## ⚙️ Setup & Installation
 
 ### 1. Clone the repository
 
@@ -175,7 +125,7 @@ The API will be available at `http://localhost:5000`
 
 ---
 
-##  API Endpoints
+## 📡 API Endpoints
 
 ### Authentication
 
@@ -188,15 +138,25 @@ The API will be available at `http://localhost:5000`
 
 | Method | Endpoint | Description | Auth Required |
 |---|---|---|---|
-| GET | `/api/v1/transactions` | Get all transactions | ✅ Yes |
+| GET | `/api/v1/transactions` | Get transactions (paginated + filtered) | ✅ Yes |
 | POST | `/api/v1/transactions` | Create a new transaction | ✅ Yes |
 | PUT | `/api/v1/transactions/<id>` | Update a transaction | ✅ Yes |
 | DELETE | `/api/v1/transactions/<id>` | Delete a transaction | ✅ Yes |
 | GET | `/api/v1/transactions/analytics` | Get income/expense summary | ✅ Yes |
 
+### Query Parameters for GET /transactions
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `page` | integer | 1 | Page number |
+| `limit` | integer | 10 | Items per page |
+| `type` | string | None | Filter by `income` or `expense` |
+| `category` | string | None | Filter by category name |
+| `month` | string | None | Filter by month in `YYYY-MM` format |
+
 ---
 
-##  Request & Response Examples
+## 📝 Request & Response Examples
 
 ### Register
 
@@ -283,6 +243,45 @@ Authorization: Bearer <your_token>
 
 ---
 
+### Get Transactions (with Pagination + Filtering)
+
+**Request:**
+```
+GET /api/v1/transactions?page=1&limit=10&type=expense&category=food
+Authorization: Bearer <your_token>
+```
+
+**Response:** `200 OK`
+```json
+{
+    "transactions": [
+        {
+            "id": 1,
+            "title": "Groceries",
+            "amount": 300.0,
+            "type": "expense",
+            "category": "food",
+            "created_at": "2024-01-15 10:30:00"
+        }
+    ],
+    "pagination": {
+        "page": 1,
+        "limit": 10,
+        "total_items": 1,
+        "total_pages": 1,
+        "has_next": false,
+        "has_prev": false
+    },
+    "filters": {
+        "type": "expense",
+        "category": "food",
+        "month": null
+    }
+}
+```
+
+---
+
 ### Analytics
 
 **Request:**
@@ -306,7 +305,7 @@ Authorization: Bearer <your_token>
 
 ---
 
-##  Running Tests
+## 🧪 Running Tests
 
 ```bash
 pytest tests/ -v
@@ -334,16 +333,21 @@ tests/test_transactions.py::test_update_transaction_success        PASSED
 tests/test_transactions.py::test_update_nonexistent_transaction    PASSED
 tests/test_transactions.py::test_delete_transaction_success        PASSED
 tests/test_transactions.py::test_delete_nonexistent_transaction    PASSED
-tests/test_transactions.py::test_analytics_correct_calculation     PASSED
+tests/test_transactions.py::test_pagination_default                    PASSED
+tests/test_transactions.py::test_pagination_page_2                     PASSED
+tests/test_transactions.py::test_filter_by_type_expense                PASSED
+tests/test_transactions.py::test_filter_by_type_income                 PASSED
+tests/test_transactions.py::test_filter_by_category                    PASSED
+tests/test_transactions.py::test_filter_combined                       PASSED
 
-17 passed in 2.31s
+27 passed in 2.31s
 ```
 
 Tests use an **in-memory SQLite database** — no PostgreSQL required to run tests.
 
 ---
 
-##  Database Migrations
+## 🔄 Database Migrations
 
 When you change `models.py`, update the database with:
 
@@ -362,7 +366,7 @@ flask db downgrade
 
 ---
 
-##  Logging
+## 📋 Logging
 
 Logs are written to two places simultaneously:
 
@@ -381,9 +385,9 @@ LOG_LEVEL=WARNING  # Shows only warnings and errors
 
 ---
 
-##  CI/CD
+## 🔁 CI/CD
 
-GitHub Actions automatically runs all 17 tests on every push to `main` or `develop`.
+GitHub Actions automatically runs all 27 tests on every push to `main` or `develop`.
 
 **Workflow:** `.github/workflows/tests.yml`
 
@@ -395,7 +399,7 @@ Python installed → Dependencies installed → pytest runs →
 
 ---
 
-##  Environment Variables
+## 🔐 Environment Variables
 
 | Variable | Description | Example |
 |---|---|---|
@@ -407,6 +411,6 @@ Python installed → Dependencies installed → pytest runs →
 
 ---
 
-##  Author
+## 👨‍💻 Author
 
-Built as a learning project covering Flask API development, PostgreSQL, JWT authentication, logging, database migrations, testing, and CI/CD.
+Built as a learning project covering Flask API development, PostgreSQL, JWT authentication, pagination, filtering, logging, database migrations, testing, and CI/CD.
