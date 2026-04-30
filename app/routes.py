@@ -89,17 +89,118 @@ def add_transaction():
 def get_transactions():
     current_user_id = get_jwt_identity()
 
-    transactions = Transaction.query.filter_by(user_id=current_user_id).all()
+    # ── Step 1: Read query parameters from the URL ────────────────────────
+    # request.args reads everything after ? in the URL
+    # Example: /transactions?page=2&limit=10&type=expense&category=food
 
-    # INFO: log count of results — useful for spotting empty accounts or data issues
+    page = request.args.get('page', 1, type=int)
+    # 'page' → parameter name
+    # 1      → default value if not provided
+    # type=int → automatically converts "2" string to 2 integer
+    # If user doesn't send ?page=... we default to page 1
+
+    limit = request.args.get('limit', 10, type=int)
+    # How many transactions per page — default 10
+    # User can override: ?limit=20
+
+    # Filtering parameters — these are optional, default is None
+    type_filter = request.args.get('type', None)
+    # ?type=expense or ?type=income
+    # Named type_filter because 'type' is a reserved Python keyword
+
+    category_filter = request.args.get('category', None)
+    # ?category=food
+
+    month_filter = request.args.get('month', None)
+    # ?month=2024-01 → only January 2024 transactions
+
+    # ── Step 2: Build the query with filters ──────────────────────────────
+    # Start with base query — always filter by current user first
+    # We use query instead of directly calling .all() so we can
+    # keep adding conditions before executing
+    query = Transaction.query.filter_by(user_id=current_user_id)
+
+    # Add type filter only if user provided it
+    if type_filter:
+        query = query.filter(Transaction.type == type_filter)
+        # This adds: AND type = 'expense' to the SQL query
+
+    # Add category filter only if user provided it
+    if category_filter:
+        query = query.filter(Transaction.category == category_filter)
+        # This adds: AND category = 'food' to the SQL query
+
+    # Add month filter only if user provided it
+    if month_filter:
+        # month_filter comes in as "2024-01" (year-month string)
+        # We extract year and month from it to filter by date
+        try:
+            year, month = month_filter.split('-')
+            # split('-') turns "2024-01" into ["2024", "01"]
+            # year = "2024", month = "01"
+
+            from sqlalchemy import extract
+            # extract() lets us pull year/month out of a DateTime column
+
+            query = query.filter(
+                extract('year', Transaction.created_at) == int(year),
+                extract('month', Transaction.created_at) == int(month)
+            )
+            # This adds: AND YEAR(created_at) = 2024 AND MONTH(created_at) = 1
+        except ValueError:
+            # If month_filter format is wrong (not "YYYY-MM"), ignore it
+            # We don't crash — we just skip the month filter silently
+            logger.warning(
+                "Invalid month filter format: %s — expected YYYY-MM",
+                month_filter
+            )
+
+    # ── Step 3: Get total count BEFORE pagination ─────────────────────────
+    # We need total_items to calculate total_pages
+    # .count() runs: SELECT COUNT(*) with all our filters applied
+    # We do this BEFORE .offset() and .limit() so we count ALL matching
+    # records, not just the current page
+    total_items = query.count()
+
+    # Calculate total pages
+    # math.ceil rounds UP — if we have 45 items and limit=10:
+    # 45/10 = 4.5 → ceil → 5 pages
+    import math
+    total_pages = math.ceil(total_items / limit) if total_items > 0 else 1
+
+    # ── Step 4: Apply pagination ──────────────────────────────────────────
+    # offset() → skip records from previous pages
+    # limit()  → take only this page's records
+    # .all()   → execute the query and return results
+    transactions = query.offset((page - 1) * limit).limit(limit).all()
+    # page 1: offset(0).limit(10)  → records 1-10
+    # page 2: offset(10).limit(10) → records 11-20
+    # page 3: offset(20).limit(10) → records 21-30
+
+    # ── Step 5: Log what happened ─────────────────────────────────────────
     logger.info(
-        "Fetched %d transactions — user_id: %s",
-        len(transactions), current_user_id
+        "Fetched %d transactions (page %d/%d) — user_id: %s | filters: type=%s, category=%s, month=%s",
+        len(transactions), page, total_pages, current_user_id,
+        type_filter, category_filter, month_filter
     )
-    return jsonify({
-        'transactions': [t.to_dict() for t in transactions]
-    })
 
+    # ── Step 6: Return data with pagination metadata ──────────────────────
+    return jsonify({
+        'transactions': [t.to_dict() for t in transactions],
+        'pagination': {
+            'page': page,               # current page number
+            'limit': limit,             # items per page
+            'total_items': total_items, # total matching transactions
+            'total_pages': total_pages, # total number of pages
+            'has_next': page < total_pages,  # is there a next page?
+            'has_prev': page > 1             # is there a previous page?
+        },
+        'filters': {
+            'type': type_filter,        # echo back what filters were applied
+            'category': category_filter,# helps the client know what's active
+            'month': month_filter
+        }
+    })
 
 @main.route('/transactions/<int:id>', methods=['PUT'])
 @jwt_required()

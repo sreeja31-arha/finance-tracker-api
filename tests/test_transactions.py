@@ -277,3 +277,177 @@ def test_analytics_correct_calculation(auth_client):
     # Check categories breakdown
     assert data['categories']['housing'] == 1500.00
     assert data['categories']['food'] == 500.00
+    
+    
+    
+    # ═══════════════════════════════════════════════════════════════════════════════
+# PAGINATION TESTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def test_pagination_default(auth_client):
+    """
+    WHAT: Add 15 transactions, fetch without any params
+    EXPECT: Only 10 returned (default limit) + pagination metadata
+    WHY: Default page=1 limit=10 should never return all 15
+    """
+    # Add 15 transactions
+    for i in range(15):
+        auth_client.post('/api/v1/transactions', json={
+            'title': f'Transaction {i}',
+            'amount': 100.00,
+            'type': 'income'
+        })
+
+    response = auth_client.get('/api/v1/transactions')
+    assert response.status_code == 200
+
+    data = response.get_json()
+
+    # Should return max 10 (default limit)
+    assert len(data['transactions']) == 10
+
+    # Check pagination metadata exists
+    assert 'pagination' in data
+    assert data['pagination']['total_items'] == 15
+    assert data['pagination']['total_pages'] == 2
+    assert data['pagination']['has_next'] == True
+    assert data['pagination']['has_prev'] == False
+
+
+def test_pagination_page_2(auth_client):
+    """
+    WHAT: Add 15 transactions, fetch page 2
+    EXPECT: 5 remaining transactions on page 2
+    WHY: Page 1 has 10, page 2 should have the remaining 5
+    """
+    # Add 15 transactions
+    for i in range(15):
+        auth_client.post('/api/v1/transactions', json={
+            'title': f'Transaction {i}',
+            'amount': 100.00,
+            'type': 'income'
+        })
+
+    response = auth_client.get('/api/v1/transactions?page=2&limit=10')
+    assert response.status_code == 200
+
+    data = response.get_json()
+    assert len(data['transactions']) == 5
+    # 15 total - 10 on page 1 = 5 on page 2
+
+    assert data['pagination']['has_next'] == False
+    assert data['pagination']['has_prev'] == True
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FILTERING TESTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def test_filter_by_type_expense(auth_client):
+    """
+    WHAT: Add income and expense transactions, filter by expense
+    EXPECT: Only expense transactions returned
+    """
+    # Add 2 income transactions
+    auth_client.post('/api/v1/transactions', json={
+        'title': 'Salary', 'amount': 5000.00, 'type': 'income'
+    })
+    auth_client.post('/api/v1/transactions', json={
+        'title': 'Freelance', 'amount': 1000.00, 'type': 'income'
+    })
+
+    # Add 3 expense transactions
+    auth_client.post('/api/v1/transactions', json={
+        'title': 'Rent', 'amount': 1500.00, 'type': 'expense', 'category': 'housing'
+    })
+    auth_client.post('/api/v1/transactions', json={
+        'title': 'Food', 'amount': 500.00, 'type': 'expense', 'category': 'food'
+    })
+    auth_client.post('/api/v1/transactions', json={
+        'title': 'Internet', 'amount': 100.00, 'type': 'expense', 'category': 'utilities'
+    })
+
+    # Filter by expense only
+    response = auth_client.get('/api/v1/transactions?type=expense')
+    assert response.status_code == 200
+
+    data = response.get_json()
+    assert data['pagination']['total_items'] == 3
+    # All returned transactions must be expenses
+    for t in data['transactions']:
+        assert t['type'] == 'expense'
+
+
+def test_filter_by_type_income(auth_client):
+    """
+    WHAT: Add income and expense transactions, filter by income
+    EXPECT: Only income transactions returned
+    """
+    auth_client.post('/api/v1/transactions', json={
+        'title': 'Salary', 'amount': 5000.00, 'type': 'income'
+    })
+    auth_client.post('/api/v1/transactions', json={
+        'title': 'Rent', 'amount': 1500.00, 'type': 'expense'
+    })
+
+    response = auth_client.get('/api/v1/transactions?type=income')
+    assert response.status_code == 200
+
+    data = response.get_json()
+    assert data['pagination']['total_items'] == 1
+    assert data['transactions'][0]['type'] == 'income'
+
+
+def test_filter_by_category(auth_client):
+    """
+    WHAT: Add transactions with different categories, filter by food
+    EXPECT: Only food transactions returned
+    """
+    auth_client.post('/api/v1/transactions', json={
+        'title': 'Groceries', 'amount': 300.00,
+        'type': 'expense', 'category': 'food'
+    })
+    auth_client.post('/api/v1/transactions', json={
+        'title': 'Restaurant', 'amount': 200.00,
+        'type': 'expense', 'category': 'food'
+    })
+    auth_client.post('/api/v1/transactions', json={
+        'title': 'Rent', 'amount': 1500.00,
+        'type': 'expense', 'category': 'housing'
+    })
+
+    response = auth_client.get('/api/v1/transactions?category=food')
+    assert response.status_code == 200
+
+    data = response.get_json()
+    assert data['pagination']['total_items'] == 2
+    for t in data['transactions']:
+        assert t['category'] == 'food'
+
+
+def test_filter_combined(auth_client):
+    """
+    WHAT: Filter by both type AND category together
+    EXPECT: Only transactions matching BOTH conditions
+    """
+    auth_client.post('/api/v1/transactions', json={
+        'title': 'Groceries', 'amount': 300.00,
+        'type': 'expense', 'category': 'food'
+    })
+    auth_client.post('/api/v1/transactions', json={
+        'title': 'Salary', 'amount': 5000.00,
+        'type': 'income', 'category': 'food'
+        # income + food — should NOT appear in expense+food filter
+    })
+    auth_client.post('/api/v1/transactions', json={
+        'title': 'Rent', 'amount': 1500.00,
+        'type': 'expense', 'category': 'housing'
+        # expense but NOT food — should NOT appear
+    })
+
+    response = auth_client.get('/api/v1/transactions?type=expense&category=food')
+    assert response.status_code == 200
+
+    data = response.get_json()
+    assert data['pagination']['total_items'] == 1
+    assert data['transactions'][0]['title'] == 'Groceries'
